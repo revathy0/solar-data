@@ -1,0 +1,914 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Contact Classifier — Sonar Rock/Mine Analysis</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+  :root{
+    --abyss: #060f16;
+    --deep: #0b1c28;
+    --panel: #0f2432;
+    --panel-2: #12293a;
+    --line: #1d3b4c;
+    --ink: #eaf1ee;
+    --ink-dim: #8fa8ac;
+    --ink-faint: #5a747a;
+    --rock: #5fb8a0;
+    --rock-dim: #2f5a50;
+    --mine: #c44536;
+    --mine-dim: #5c2b25;
+    --amber: #d9a441;
+    --radius: 3px;
+  }
+
+  *{ box-sizing: border-box; }
+
+  html,body{
+    margin:0; padding:0;
+    background: var(--abyss);
+    color: var(--ink);
+    font-family: 'Space Grotesk', sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body{
+    background-image:
+      radial-gradient(ellipse 120% 60% at 50% 0%, #0d2130 0%, var(--abyss) 55%),
+      radial-gradient(ellipse 80% 50% at 80% 100%, #0a1a22 0%, transparent 60%);
+    overflow-x: hidden;
+  }
+
+  #drift{
+    position: fixed; inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.5;
+  }
+
+  .wrap{
+    position: relative;
+    z-index: 1;
+    max-width: 920px;
+    margin: 0 auto;
+    padding: 0 24px 80px;
+  }
+
+  /* ---------- Hero / Radar ---------- */
+
+  .hero{
+    position: relative;
+    padding-top: 48px;
+    text-align: center;
+  }
+
+  .hero-label{
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    color: var(--ink-faint);
+    margin: 0 0 10px;
+  }
+
+  .hero h1{
+    font-size: clamp(28px, 5vw, 44px);
+    font-weight: 600;
+    line-height: 1.15;
+    margin: 0 0 12px;
+    letter-spacing: -0.01em;
+  }
+
+  .hero p.sub{
+    max-width: 480px;
+    margin: 0 auto 32px;
+    color: var(--ink-dim);
+    font-size: 15px;
+    line-height: 1.6;
+  }
+
+  .radar-frame{
+    position: relative;
+    width: min(420px, 84vw);
+    aspect-ratio: 1 / 1;
+    margin: 0 auto 8px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 50% 42%, #0e2734, #061019 78%);
+    box-shadow:
+      0 0 0 1px var(--line),
+      0 0 0 8px rgba(9, 24, 33, 0.6),
+      0 30px 60px -20px rgba(0,0,0,0.6),
+      inset 0 0 40px rgba(0,0,0,0.5);
+  }
+
+  #radar-canvas{
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+    border-radius: 50%;
+  }
+
+  .radar-readout{
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--ink-faint);
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    margin-top: 14px;
+  }
+  .radar-readout span b{ color: var(--ink-dim); font-weight: 500; }
+
+  /* ---------- Sections ---------- */
+
+  section{ margin-top: 64px; }
+
+  .section-head{
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 16px;
+    margin-bottom: 18px;
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 14px;
+  }
+  .section-head h2{
+    font-size: 19px;
+    font-weight: 600;
+    margin: 0;
+  }
+  .section-head .hint{
+    font-size: 13px;
+    color: var(--ink-faint);
+    text-align: right;
+  }
+
+  /* ---------- Waveform editor ---------- */
+
+  .editor-panel{
+    background: linear-gradient(180deg, var(--panel), var(--deep));
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 18px 18px 14px;
+  }
+
+  #wave-canvas{
+    width: 100%;
+    height: 200px;
+    display: block;
+    cursor: crosshair;
+    touch-action: none;
+    border-radius: 2px;
+  }
+
+  .wave-axis{
+    display: flex;
+    justify-content: space-between;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10.5px;
+    color: var(--ink-faint);
+    margin-top: 6px;
+    padding: 0 2px;
+  }
+
+  .controls{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 18px;
+  }
+
+  button{
+    font-family: 'Space Grotesk', sans-serif;
+    font-size: 13.5px;
+    font-weight: 500;
+    color: var(--ink);
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 9px 14px;
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+  }
+  button:hover{ background: #17364a; border-color: #2a5064; }
+  button:active{ transform: translateY(1px); }
+
+  button.ghost{
+    background: transparent;
+  }
+
+  button.primary{
+    background: var(--rock);
+    border-color: var(--rock);
+    color: #06140f;
+    font-weight: 600;
+    padding: 11px 22px;
+    font-size: 14.5px;
+  }
+  button.primary:hover{ background: #6fc9b0; }
+
+  .status-line{
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--ink-faint);
+    margin-top: 14px;
+  }
+  .status-line b{ color: var(--amber); font-weight: 500; }
+
+  .run-row{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin-top: 28px;
+  }
+
+  /* ---------- Results ---------- */
+
+  #results{
+    opacity: 0;
+    max-height: 0;
+    overflow: hidden;
+    transition: opacity 0.5s ease, max-height 0.6s ease;
+  }
+  #results.show{
+    opacity: 1;
+    max-height: 2000px;
+  }
+
+  .verdict{
+    display: flex;
+    align-items: center;
+    gap: 22px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 26px 26px;
+    margin-top: 8px;
+  }
+
+  .verdict-badge{
+    flex: none;
+    width: 84px; height: 84px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    border: 2px solid;
+  }
+  .verdict-badge.rock{ border-color: var(--rock); color: var(--rock); background: rgba(95,184,160,0.08); }
+  .verdict-badge.mine{ border-color: var(--mine); color: var(--mine); background: rgba(196,69,54,0.08); }
+
+  .verdict-text h3{
+    margin: 0 0 4px;
+    font-size: 22px;
+    font-weight: 600;
+  }
+  .verdict-text p{
+    margin: 0;
+    font-size: 13.5px;
+    color: var(--ink-dim);
+    line-height: 1.5;
+    max-width: 480px;
+  }
+
+  .confidence-row{
+    margin-top: 20px;
+  }
+  .confidence-labels{
+    display: flex;
+    justify-content: space-between;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+    color: var(--ink-faint);
+    margin-bottom: 6px;
+  }
+  .confidence-bar{
+    position: relative;
+    height: 10px;
+    border-radius: 6px;
+    background: var(--mine-dim);
+    overflow: hidden;
+  }
+  .confidence-fill{
+    position: absolute; inset: 0 0 0 auto;
+    height: 100%;
+    background: var(--rock);
+    transition: width 0.8s cubic-bezier(.2,.8,.2,1);
+  }
+  .confidence-marker{
+    position: absolute;
+    top: -3px;
+    width: 2px; height: 16px;
+    background: var(--ink);
+    transform: translateX(-1px);
+    transition: left 0.8s cubic-bezier(.2,.8,.2,1);
+  }
+
+  .contrib-panel{
+    margin-top: 20px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 22px 24px 8px;
+  }
+  .contrib-panel h4{
+    margin: 0 0 4px;
+    font-size: 14.5px;
+    font-weight: 600;
+  }
+  .contrib-panel .desc{
+    font-size: 12.5px;
+    color: var(--ink-faint);
+    margin: 0 0 18px;
+  }
+
+  .contrib-row{
+    display: grid;
+    grid-template-columns: 64px 1fr 50px;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 12px;
+  }
+  .contrib-row .band-label{ color: var(--ink-faint); }
+  .contrib-track{
+    position: relative;
+    height: 8px;
+    background: var(--line);
+    border-radius: 4px;
+  }
+  .contrib-track .zero{
+    position: absolute; left: 50%; top: -3px;
+    width: 1px; height: 14px;
+    background: var(--ink-faint);
+    opacity: 0.5;
+  }
+  .contrib-fill{
+    position: absolute; top: 0; height: 100%;
+    border-radius: 4px;
+  }
+  .contrib-fill.rock{ background: var(--rock); }
+  .contrib-fill.mine{ background: var(--mine); }
+  .contrib-val{ text-align: right; color: var(--ink-dim); }
+
+  /* ---------- Stats footer ---------- */
+
+  .stats-strip{
+    margin-top: 64px;
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    overflow: hidden;
+  }
+  .stat-cell{
+    background: var(--deep);
+    padding: 18px 16px;
+    text-align: center;
+  }
+  .stat-cell .num{
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--ink);
+  }
+  .stat-cell .lab{
+    font-size: 11.5px;
+    color: var(--ink-faint);
+    margin-top: 4px;
+  }
+
+  footer{
+    text-align: center;
+    margin-top: 40px;
+    font-size: 12px;
+    color: var(--ink-faint);
+    line-height: 1.7;
+  }
+
+  @media (max-width: 560px){
+    .stats-strip{ grid-template-columns: repeat(2, 1fr); }
+    .verdict{ flex-direction: column; text-align: center; }
+    .contrib-row{ grid-template-columns: 50px 1fr 44px; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="drift"></canvas>
+
+<div class="wrap">
+
+  <div class="hero">
+    <p class="hero-label">SONAR RETURN ANALYSIS</p>
+    <h1>Rock, or mine?</h1>
+    <p class="sub">Shape a sonar echo signature below — 60 energy bands captured from a bounced acoustic pulse — and a logistic regression model trained on real seabed sonar returns will call the contact.</p>
+
+    <div class="radar-frame">
+      <canvas id="radar-canvas"></canvas>
+    </div>
+    <div class="radar-readout">
+      <span>BEARING <b id="ro-bearing">000°</b></span>
+      <span>CONTACTS <b id="ro-contacts">0</b></span>
+      <span>STATUS <b id="ro-status">SCANNING</b></span>
+    </div>
+  </div>
+
+  <section id="editor-section">
+    <div class="section-head">
+      <h2>Echo signature</h2>
+      <div class="hint">60 frequency bands, energy 0.0–1.0<br>drag to sketch, or load a real reading</div>
+    </div>
+
+    <div class="editor-panel">
+      <canvas id="wave-canvas"></canvas>
+      <div class="wave-axis">
+        <span>BAND 1 (low)</span>
+        <span>BAND 30</span>
+        <span>BAND 60 (high)</span>
+      </div>
+
+      <div class="controls">
+        <button id="btn-rock" class="ghost">Load rock reading</button>
+        <button id="btn-mine" class="ghost">Load mine reading</button>
+        <button id="btn-random" class="ghost">Randomize</button>
+        <button id="btn-flat" class="ghost">Flatten to average</button>
+      </div>
+
+      <div class="status-line">CURRENT SIGNATURE: <b id="status-source">custom sketch</b></div>
+    </div>
+
+    <div class="run-row">
+      <button id="btn-run" class="primary">Run analysis</button>
+    </div>
+  </section>
+
+  <section id="results-section">
+    <div id="results">
+      <div class="section-head">
+        <h2>Classification</h2>
+        <div class="hint" id="hint-z"></div>
+      </div>
+
+      <div class="verdict">
+        <div class="verdict-badge" id="verdict-badge">—</div>
+        <div class="verdict-text">
+          <h3 id="verdict-title">—</h3>
+          <p id="verdict-desc">—</p>
+        </div>
+      </div>
+
+      <div class="confidence-row">
+        <div class="confidence-labels">
+          <span>MINE</span>
+          <span id="conf-pct">50% / 50%</span>
+          <span>ROCK</span>
+        </div>
+        <div class="confidence-bar">
+          <div class="confidence-fill" id="conf-fill" style="width:50%"></div>
+          <div class="confidence-marker" id="conf-marker" style="left:50%"></div>
+        </div>
+      </div>
+
+      <div class="contrib-panel">
+        <h4>What drove the call</h4>
+        <p class="desc">The bands with the strongest pull toward each verdict, weighted by the trained model.</p>
+        <div id="contrib-list"></div>
+      </div>
+    </div>
+  </section>
+
+  <div class="stats-strip">
+    <div class="stat-cell"><div class="num">208</div><div class="lab">training returns</div></div>
+    <div class="stat-cell"><div class="num">97R / 111M</div><div class="lab">rock / mine split</div></div>
+    <div class="stat-cell"><div class="num">83.4%</div><div class="lab">train accuracy</div></div>
+    <div class="stat-cell"><div class="num">76.2%</div><div class="lab">held-out accuracy</div></div>
+  </div>
+
+  <footer>
+    Logistic regression trained on the UCI Connectionist Bench (Sonar) dataset — 60 sonar energy bands per return, labeled by naval mine vs. rock.<br>
+    A demonstration model, not a targeting or safety system.
+  </footer>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ============ Embedded model ============ */
+  const COEF = [-0.22072749945794196,-0.230628114579946,-0.1895093772383954,-0.4121992684975012,-0.3245717294264077,-0.1283647733597444,0.09071934763863641,-0.01084424262036097,-0.8764718609040326,-1.0785465331914603,-1.5276201590571776,-1.4531588131998125,-0.731911332547399,-0.06578904295029073,0.14874999725653437,0.49235346476423664,0.4110586888306225,0.42836943055421495,-0.3173280791180539,-0.6542127494829145,-0.6880495182377883,-0.5045390407793563,-0.43244499751075266,-0.36676661601362304,0.3407193378005119,0.05112758617344231,-0.13127046458711797,-0.34565348599274226,-0.34820838434472273,-0.3553410843019499,0.8525047573393543,-0.23285812818729856,-0.10674681807435833,0.1492485485730994,0.5356397152238813,1.281273311726916,0.7884608865440289,-0.22898153038319274,-0.3865835460242972,0.5197924754712918,0.012801418521413482,-0.664408487467103,-0.8777999720169013,-0.9935494822813203,-1.6064599117448082,-1.3373401001584087,-0.7737286431658646,-0.787066768570168,-0.5307490405272087,-0.029190743720060388,-0.12966970918910423,-0.1028486777173667,-0.03448652390196159,-0.06929609794268649,-0.01508155641496902,-0.0375676449573095,-0.005322751716654415,-0.06589269581884169,-0.058363106818695824,-0.024158890116098043];
+  const INTERCEPT = 2.9393596748893938;
+  const N_BANDS = 60;
+
+  const FEATURE_MEAN = [0.0292,0.0384,0.0438,0.0539,0.0752,0.1046,0.1217,0.1348,0.178,0.2083,0.236,0.2502,0.2733,0.2966,0.3202,0.3785,0.416,0.4523,0.5048,0.563,0.6091,0.6243,0.647,0.6727,0.6754,0.6999,0.7022,0.694,0.6421,0.5809,0.5045,0.439,0.4172,0.4032,0.3926,0.3848,0.3638,0.3397,0.3258,0.3112,0.2893,0.2783,0.2465,0.2141,0.1972,0.1606,0.1225,0.0914,0.0519,0.0204,0.0161,0.0134,0.0107,0.0109,0.0093,0.0082,0.0078,0.0079,0.0079,0.0065];
+
+  const SAMPLES = {
+    R: [
+      [0.0442,0.0477,0.0049,0.0581,0.0278,0.0678,0.1664,0.149,0.0974,0.1268,0.1109,0.2375,0.2007,0.214,0.1109,0.2036,0.2468,0.6682,0.8345,0.8252,0.8017,0.8982,0.9664,0.8515,0.6626,0.3241,0.2054,0.5669,0.5726,0.4877,0.7532,0.76,0.5185,0.412,0.556,0.5569,0.1336,0.3831,0.4611,0.433,0.2556,0.1466,0.3489,0.2659,0.0944,0.137,0.1344,0.0416,0.0719,0.0637,0.021,0.0204,0.0216,0.0135,0.0055,0.0073,0.008,0.0105,0.0059,0.0105],
+      [0.0225,0.0019,0.0075,0.0097,0.0445,0.0906,0.0889,0.0655,0.1624,0.1452,0.1442,0.0948,0.0618,0.1641,0.0708,0.0844,0.259,0.2679,0.3094,0.4678,0.5958,0.7245,0.8773,0.9214,0.9282,0.9942,1.0,0.9071,0.8545,0.7293,0.6499,0.6071,0.5588,0.5967,0.6275,0.5459,0.4786,0.3965,0.2087,0.1651,0.1836,0.0652,0.0758,0.0486,0.0353,0.0297,0.0241,0.0379,0.0119,0.0073,0.0051,0.0034,0.0129,0.01,0.0044,0.0057,0.003,0.0035,0.0021,0.0027],
+      [0.0195,0.0213,0.0058,0.019,0.0319,0.0571,0.1004,0.0668,0.0691,0.0242,0.0728,0.0639,0.3002,0.3854,0.4767,0.4602,0.3175,0.416,0.6428,1.0,0.8631,0.5212,0.3156,0.5952,0.7732,0.6042,0.4375,0.5487,0.472,0.6235,0.3851,0.159,0.3891,0.5294,0.3504,0.448,0.4041,0.5031,0.6475,0.5493,0.3548,0.2028,0.1882,0.0845,0.1315,0.159,0.0562,0.0617,0.0343,0.037,0.0261,0.0157,0.0074,0.0271,0.0203,0.0089,0.0095,0.0095,0.0021,0.0053]
+    ],
+    M: [
+      [0.0368,0.0279,0.0103,0.0566,0.0759,0.0679,0.097,0.1473,0.2164,0.2544,0.2936,0.2935,0.2657,0.3187,0.2794,0.2534,0.198,0.1929,0.2826,0.3245,0.3504,0.3324,0.4217,0.4774,0.4808,0.6325,0.8334,0.9458,1.0,0.8425,0.5524,0.4795,0.52,0.3968,0.194,0.1519,0.201,0.1736,0.1029,0.2244,0.3717,0.4449,0.3939,0.203,0.201,0.2187,0.184,0.1477,0.0971,0.0224,0.0151,0.0105,0.0024,0.0018,0.0057,0.0092,0.0009,0.0086,0.011,0.0052],
+      [0.0707,0.1252,0.1447,0.1644,0.1693,0.0844,0.0715,0.0947,0.1583,0.1247,0.234,0.1764,0.2284,0.3115,0.4725,0.5543,0.5386,0.3746,0.4583,0.5961,0.7464,0.7644,0.5711,0.6257,0.6695,0.7131,0.7567,0.8077,0.8477,0.9289,0.9513,0.7995,0.4362,0.4048,0.4952,0.1712,0.3652,0.3763,0.2841,0.0427,0.5331,0.6952,0.4288,0.3063,0.5835,0.5692,0.263,0.1196,0.0983,0.0374,0.0291,0.0156,0.0197,0.0135,0.0127,0.0138,0.0133,0.0131,0.0154,0.0218],
+      [0.0233,0.0394,0.0416,0.0547,0.0993,0.1515,0.1674,0.1513,0.1723,0.2078,0.1239,0.0236,0.1771,0.3115,0.499,0.6707,0.7655,0.8485,0.9805,1.0,1.0,0.9992,0.9067,0.6803,0.5103,0.4716,0.498,0.6196,0.7171,0.6316,0.3554,0.2897,0.4316,0.3791,0.2421,0.0944,0.0351,0.0844,0.0436,0.113,0.2045,0.1937,0.0834,0.1502,0.1675,0.1058,0.1111,0.0849,0.0596,0.0201,0.0071,0.0104,0.0062,0.0026,0.0025,0.0061,0.0038,0.0101,0.0078,0.0006]
+    ]
+  };
+
+  function sigmoid(z){ return 1/(1+Math.exp(-z)); }
+
+  function predict(values){
+    let z = INTERCEPT;
+    for(let i=0;i<N_BANDS;i++) z += COEF[i]*values[i];
+    const probRock = sigmoid(z);
+    return { z, probRock, probMine: 1-probRock, label: probRock>0.5 ? 'R' : 'M' };
+  }
+
+  /* ============ State ============ */
+  let signature = FEATURE_MEAN.slice();
+  let sourceLabel = 'flattened average';
+  let rockCycle = 0, mineCycle = 0;
+  let contactsCount = 0;
+  let lastPing = null; // {x,y,cls} in radar-normalized coords for drawing a persistent contact dot
+
+  /* ============ Ambient drifting particles (background) ============ */
+  const drift = document.getElementById('drift');
+  const dctx = drift.getContext('2d');
+  let particles = [];
+  function sizeDrift(){
+    drift.width = window.innerWidth;
+    drift.height = window.innerHeight;
+    const count = Math.floor((drift.width*drift.height)/38000);
+    particles = Array.from({length: count}, () => ({
+      x: Math.random()*drift.width,
+      y: Math.random()*drift.height,
+      r: 0.6 + Math.random()*1.6,
+      vy: 0.06 + Math.random()*0.16,
+      vx: (Math.random()-0.5)*0.05,
+      a: 0.08 + Math.random()*0.18
+    }));
+  }
+  function drawDrift(){
+    dctx.clearRect(0,0,drift.width,drift.height);
+    dctx.fillStyle = '#5fb8a0';
+    for(const p of particles){
+      p.y -= p.vy; p.x += p.vx;
+      if(p.y < -5) p.y = drift.height+5;
+      if(p.x < -5) p.x = drift.width+5;
+      if(p.x > drift.width+5) p.x = -5;
+      dctx.globalAlpha = p.a;
+      dctx.beginPath();
+      dctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+      dctx.fill();
+    }
+    dctx.globalAlpha = 1;
+    requestAnimationFrame(drawDrift);
+  }
+  sizeDrift();
+  window.addEventListener('resize', sizeDrift);
+  drawDrift();
+
+  /* ============ Radar (interactive hero) ============ */
+  const radarCanvas = document.getElementById('radar-canvas');
+  const rctx = radarCanvas.getContext('2d');
+  let sweepAngle = 0;
+  let blips = [];
+  let pingProgress = null; // 0..1 animating outward ring when "Run analysis" fires
+
+  function fitRadar(){
+    const rect = radarCanvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    radarCanvas.width = rect.width*dpr;
+    radarCanvas.height = rect.height*dpr;
+    rctx.setTransform(dpr,0,0,dpr,0,0);
+  }
+  fitRadar();
+  window.addEventListener('resize', fitRadar);
+
+  function spawnBlip(){
+    const ang = Math.random()*Math.PI*2;
+    const rad = 0.15 + Math.random()*0.8;
+    blips.push({ang, rad, life: 1});
+  }
+  for(let i=0;i<4;i++) spawnBlip();
+
+  function drawRadar(){
+    const rect = radarCanvas.getBoundingClientRect();
+    const w = rect.width, h = rect.height;
+    const cx = w/2, cy = h/2;
+    const R = Math.min(w,h)/2 - 6;
+    rctx.clearRect(0,0,w,h);
+
+    // range rings
+    rctx.strokeStyle = 'rgba(95,184,160,0.14)';
+    rctx.lineWidth = 1;
+    for(let i=1;i<=4;i++){
+      rctx.beginPath();
+      rctx.arc(cx,cy,R*i/4,0,Math.PI*2);
+      rctx.stroke();
+    }
+    // crosshairs
+    rctx.beginPath();
+    rctx.moveTo(cx-R,cy); rctx.lineTo(cx+R,cy);
+    rctx.moveTo(cx,cy-R); rctx.lineTo(cx,cy+R);
+    rctx.stroke();
+
+    // sweep gradient wedge
+    const grad = rctx.createConicGradient ? rctx.createConicGradient(sweepAngle-0.9, cx, cy) : null;
+    rctx.save();
+    rctx.beginPath();
+    rctx.moveTo(cx,cy);
+    rctx.arc(cx,cy,R, sweepAngle-0.55, sweepAngle);
+    rctx.closePath();
+    if(grad){
+      grad.addColorStop(0, 'rgba(95,184,160,0)');
+      grad.addColorStop(1, 'rgba(95,184,160,0.30)');
+      rctx.fillStyle = grad;
+    } else {
+      rctx.fillStyle = 'rgba(95,184,160,0.18)';
+    }
+    rctx.fill();
+    rctx.restore();
+
+    // sweep line
+    rctx.strokeStyle = 'rgba(120,220,190,0.85)';
+    rctx.lineWidth = 1.5;
+    rctx.beginPath();
+    rctx.moveTo(cx,cy);
+    rctx.lineTo(cx+Math.cos(sweepAngle)*R, cy+Math.sin(sweepAngle)*R);
+    rctx.stroke();
+
+    // ambient blips, fading
+    blips = blips.filter(b=>b.life>0);
+    for(const b of blips){
+      const bx = cx+Math.cos(b.ang)*b.rad*R;
+      const by = cy+Math.sin(b.ang)*b.rad*R;
+      rctx.globalAlpha = Math.max(0,b.life)*0.55;
+      rctx.fillStyle = '#5fb8a0';
+      rctx.beginPath();
+      rctx.arc(bx,by,2.2,0,Math.PI*2);
+      rctx.fill();
+      b.life -= 0.006;
+    }
+    rctx.globalAlpha = 1;
+    if(Math.random()<0.01) spawnBlip();
+
+    // confirmed contact ping (after Run analysis)
+    if(lastPing){
+      const px = cx+Math.cos(lastPing.ang)*lastPing.rad*R;
+      const py = cy+Math.sin(lastPing.ang)*lastPing.rad*R;
+      const color = lastPing.cls==='R' ? '#5fb8a0' : '#c44536';
+      rctx.fillStyle = color;
+      rctx.beginPath();
+      rctx.arc(px,py,4,0,Math.PI*2);
+      rctx.fill();
+
+      if(pingProgress !== null){
+        rctx.strokeStyle = color;
+        rctx.globalAlpha = Math.max(0, 1-pingProgress);
+        rctx.lineWidth = 2;
+        rctx.beginPath();
+        rctx.arc(px,py, 4 + pingProgress*40, 0, Math.PI*2);
+        rctx.stroke();
+        rctx.globalAlpha = 1;
+        pingProgress += 0.02;
+        if(pingProgress>1) pingProgress = 0.0001; // loop the pulse gently
+      }
+    }
+
+    sweepAngle += 0.012;
+    document.getElementById('ro-bearing').textContent =
+      String(Math.round(((sweepAngle*180/Math.PI)%360+360)%360)).padStart(3,'0') + '°';
+
+    requestAnimationFrame(drawRadar);
+  }
+  drawRadar();
+
+  /* ============ Waveform editor ============ */
+  const waveCanvas = document.getElementById('wave-canvas');
+  const wctx = waveCanvas.getContext('2d');
+
+  function fitWave(){
+    const rect = waveCanvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    waveCanvas.width = rect.width*dpr;
+    waveCanvas.height = rect.height*dpr;
+    wctx.setTransform(dpr,0,0,dpr,0,0);
+    drawWave();
+  }
+
+  function drawWave(){
+    const rect = waveCanvas.getBoundingClientRect();
+    const w = rect.width, h = rect.height;
+    wctx.clearRect(0,0,w,h);
+
+    // baseline grid
+    wctx.strokeStyle = 'rgba(29,59,76,0.7)';
+    wctx.lineWidth = 1;
+    for(let g=0; g<=4; g++){
+      const gy = h - (g/4)*h;
+      wctx.beginPath();
+      wctx.moveTo(0,gy); wctx.lineTo(w,gy);
+      wctx.stroke();
+    }
+
+    const gap = 1.5;
+    const bw = (w - gap*(N_BANDS-1)) / N_BANDS;
+
+    for(let i=0;i<N_BANDS;i++){
+      const v = Math.max(0, Math.min(1, signature[i]));
+      const bh = v*h;
+      const x = i*(bw+gap);
+      const y = h - bh;
+      const grad = wctx.createLinearGradient(0,y,0,h);
+      grad.addColorStop(0, '#7fd0b8');
+      grad.addColorStop(1, '#2f5a50');
+      wctx.fillStyle = grad;
+      wctx.fillRect(x,y,bw,bh);
+    }
+
+    // amplitude outline for a "trace" feel
+    wctx.strokeStyle = 'rgba(180,230,215,0.55)';
+    wctx.lineWidth = 1.2;
+    wctx.beginPath();
+    for(let i=0;i<N_BANDS;i++){
+      const v = Math.max(0, Math.min(1, signature[i]));
+      const x = i*(bw+gap) + bw/2;
+      const y = h - v*h;
+      if(i===0) wctx.moveTo(x,y); else wctx.lineTo(x,y);
+    }
+    wctx.stroke();
+  }
+
+  function setSignatureFromPointer(clientX, clientY, dragStartIndex){
+    const rect = waveCanvas.getBoundingClientRect();
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    const gap = 1.5;
+    const bw = (rect.width - gap*(N_BANDS-1)) / N_BANDS;
+    let idx = Math.floor(x/(bw+gap));
+    idx = Math.max(0, Math.min(N_BANDS-1, idx));
+    const val = Math.max(0, Math.min(1, 1 - (y/rect.height)));
+
+    if(dragStartIndex!==null && dragStartIndex!==undefined && dragStartIndex!==idx){
+      const lo = Math.min(dragStartIndex, idx), hi = Math.max(dragStartIndex, idx);
+      for(let i=lo;i<=hi;i++) signature[i] = val;
+    } else {
+      signature[idx] = val;
+    }
+    sourceLabel = 'custom sketch';
+    document.getElementById('status-source').textContent = sourceLabel;
+    drawWave();
+    return idx;
+  }
+
+  let dragging = false;
+  let lastIdx = null;
+
+  function pointerPos(e){
+    if(e.touches && e.touches[0]) return {x: e.touches[0].clientX, y: e.touches[0].clientY};
+    return {x: e.clientX, y: e.clientY};
+  }
+
+  function startDrag(e){
+    dragging = true;
+    const p = pointerPos(e);
+    lastIdx = setSignatureFromPointer(p.x, p.y, null);
+    e.preventDefault();
+  }
+  function moveDrag(e){
+    if(!dragging) return;
+    const p = pointerPos(e);
+    lastIdx = setSignatureFromPointer(p.x, p.y, lastIdx);
+    e.preventDefault();
+  }
+  function endDrag(){ dragging = false; lastIdx = null; }
+
+  waveCanvas.addEventListener('mousedown', startDrag);
+  window.addEventListener('mousemove', moveDrag);
+  window.addEventListener('mouseup', endDrag);
+  waveCanvas.addEventListener('touchstart', startDrag, {passive:false});
+  waveCanvas.addEventListener('touchmove', moveDrag, {passive:false});
+  waveCanvas.addEventListener('touchend', endDrag);
+
+  window.addEventListener('resize', fitWave);
+  fitWave();
+
+  /* ============ Controls ============ */
+  document.getElementById('btn-rock').addEventListener('click', ()=>{
+    signature = SAMPLES.R[rockCycle % SAMPLES.R.length].slice();
+    rockCycle++;
+    sourceLabel = 'recorded rock return #' + rockCycle;
+    document.getElementById('status-source').textContent = sourceLabel;
+    drawWave();
+  });
+  document.getElementById('btn-mine').addEventListener('click', ()=>{
+    signature = SAMPLES.M[mineCycle % SAMPLES.M.length].slice();
+    mineCycle++;
+    sourceLabel = 'recorded mine return #' + mineCycle;
+    document.getElementById('status-source').textContent = sourceLabel;
+    drawWave();
+  });
+  document.getElementById('btn-random').addEventListener('click', ()=>{
+    signature = FEATURE_MEAN.map(v=>{
+      const jitter = (Math.random()-0.5)*0.6;
+      return Math.max(0, Math.min(1, v + jitter*(0.3+Math.random()*0.7)));
+    });
+    sourceLabel = 'randomized';
+    document.getElementById('status-source').textContent = sourceLabel;
+    drawWave();
+  });
+  document.getElementById('btn-flat').addEventListener('click', ()=>{
+    signature = FEATURE_MEAN.slice();
+    sourceLabel = 'flattened average';
+    document.getElementById('status-source').textContent = sourceLabel;
+    drawWave();
+  });
+
+  /* ============ Run analysis ============ */
+  const bandRanges = [
+    [0,9,'1–10'], [10,19,'11–20'], [20,29,'21–30'], [30,39,'31–40'], [40,49,'41–50'], [50,59,'51–60']
+  ];
+
+  document.getElementById('btn-run').addEventListener('click', ()=>{
+    const result = predict(signature);
+    contactsCount++;
+    document.getElementById('ro-contacts').textContent = contactsCount;
+    document.getElementById('ro-status').textContent = result.label==='R' ? 'ROCK CONFIRMED' : 'MINE CONFIRMED';
+
+    lastPing = {
+      ang: Math.random()*Math.PI*2,
+      rad: 0.25 + Math.random()*0.6,
+      cls: result.label
+    };
+    pingProgress = 0.0001;
+
+    const pct = Math.round(result.probRock*100);
+    const badge = document.getElementById('verdict-badge');
+    const title = document.getElementById('verdict-title');
+    const desc = document.getElementById('verdict-desc');
+    const fill = document.getElementById('conf-fill');
+    const marker = document.getElementById('conf-marker');
+    const confPct = document.getElementById('conf-pct');
+
+    badge.className = 'verdict-badge ' + (result.label==='R' ? 'rock' : 'mine');
+    badge.textContent = result.label==='R' ? 'ROCK' : 'MINE';
+    title.textContent = result.label==='R' ? 'This is a rock.' : 'This is a mine.';
+    const margin = Math.abs(pct-50);
+    const conviction = margin>35 ? 'strong' : margin>15 ? 'moderate' : 'weak';
+    desc.textContent = `Model confidence is ${conviction} — ${pct}% probability of rock vs. ${100-pct}% mine, based on the shape of the echo across all 60 bands.`;
+
+    fill.style.width = pct + '%';
+    marker.style.left = pct + '%';
+    confPct.textContent = `${100-pct}% / ${pct}%`;
+
+    document.getElementById('hint-z').textContent = `raw score z = ${result.z.toFixed(3)}`;
+
+    // contribution breakdown, grouped into 6 bands for legibility
+    const groupContrib = bandRanges.map(([lo,hi,label])=>{
+      let sum = 0;
+      for(let i=lo;i<=hi;i++) sum += COEF[i]*signature[i];
+      return {label, sum};
+    });
+    const maxAbs = Math.max(...groupContrib.map(g=>Math.abs(g.sum)), 0.01);
+    const list = document.getElementById('contrib-list');
+    list.innerHTML = '';
+    groupContrib
+      .slice()
+      .sort((a,b)=>Math.abs(b.sum)-Math.abs(a.sum))
+      .forEach(g=>{
+        const row = document.createElement('div');
+        row.className = 'contrib-row';
+        const pctWidth = Math.abs(g.sum)/maxAbs*50;
+        const isRock = g.sum>=0;
+        row.innerHTML = `
+          <div class="band-label">bands ${g.label}</div>
+          <div class="contrib-track">
+            <div class="zero"></div>
+            <div class="contrib-fill ${isRock?'rock':'mine'}" style="
+              ${isRock ? 'left:50%;' : `left:${50-pctWidth}%;`}
+              width:${pctWidth}%;"></div>
+          </div>
+          <div class="contrib-val">${g.sum>=0?'+':''}${g.sum.toFixed(2)}</div>
+        `;
+        list.appendChild(row);
+      });
+
+    document.getElementById('results').classList.add('show');
+    document.getElementById('results-section').scrollIntoView({behavior:'smooth', block:'start'});
+  });
+
+})();
+</script>
+
+</body>
+</html>
